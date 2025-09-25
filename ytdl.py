@@ -5,6 +5,8 @@ import sys
 import webbrowser
 import re
 from yt_dlp import YoutubeDL
+import imageio_ffmpeg as ffmpeg
+ffmpeg_path = ffmpeg.get_ffmpeg_exe()
 
 # ----------------- Worker Functions -----------------
 CURRENT_VERSION = "1.0.0"
@@ -69,8 +71,7 @@ def download_video(url, save_path, log_widget, status_label):
         output_file = base + ".mp4"
 
         status_label.config(text="Converting to MP4...")
-        #subprocess.run([ "ffmpeg", "-y", "-i", safe_file, "-c:v", "libx264", "-preset", "fast", "-c:a", "aac", "-b:a", "192k", output_file ], check=True, shell=True)
-        subprocess.run([ "ffmpeg", "-y", "-i", safe_file, "-c:v", "copy", "-c:a", "aac", output_file ], check=True, shell=True)
+        subprocess.run([ ffmpeg_path, "-y", "-i", safe_file, "-c:v", "copy", "-c:a", "aac", output_file ], check=True, shell=True)
         # Delete original webm
         os.remove(safe_file)
 
