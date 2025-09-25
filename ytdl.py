@@ -9,7 +9,7 @@ import imageio_ffmpeg as ffmpeg
 ffmpeg_path = ffmpeg.get_ffmpeg_exe()
 
 # ----------------- Worker Functions -----------------
-CURRENT_VERSION = "1.0.0"
+CURRENT_VERSION = "1.1.0"
 REPO = "JordanDSilva/youtube-downloader"
 
 def make_safe_filename(name):
