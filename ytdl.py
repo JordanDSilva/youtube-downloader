@@ -3,17 +3,21 @@ from tkinter import filedialog, messagebox, ttk
 import threading, os, subprocess, requests
 import sys
 import webbrowser
+import re
 from yt_dlp import YoutubeDL
 
 # ----------------- Worker Functions -----------------
 CURRENT_VERSION = "1.0.0"
 REPO = "JordanDSilva/youtube-downloader"
 
-def get_ffmpeg_path():
-    if hasattr(sys, "_MEIPASS"):  # Running from PyInstaller bundle
-        # Windows bundle
-        return os.path.join(sys._MEIPASS, "ffmpeg.exe")
-    return "/usr/bin/ffmpeg"  # fallback: system-installed ffmpeg
+def make_safe_filename(name):
+    # Replace & with 'and'
+    name = name.replace("&", "and")
+    # Remove illegal Windows characters: \ / : * ? " < > |
+    name = re.sub(r'[\\/:*?"<>|]', '', name)
+    # Replace multiple spaces with a single space
+    name = re.sub(r'\s+', ' ', name).strip()
+    return name
 
 def check_for_update():
     try:
@@ -44,8 +48,6 @@ def download_video(url, save_path, log_widget, status_label):
         status_label.config(text="Downloading...")
         ydl_opts = {
             'format': "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
-            'merge_output_format': 'mp4',
-            'ffmpeg_location': os.path.dirname(get_ffmpeg_path()),
             'outtmpl': os.path.join(save_path, '%(title)s.%(ext)s'),
             'noplaylist': True,
             'progress_hooks': [lambda d: progress_hook(d, log_widget, status_label)],
@@ -53,14 +55,26 @@ def download_video(url, save_path, log_widget, status_label):
             'no_warnings': True,
         }
         with YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
+           info = ydl.extract_info(url, download=True)
+           downloaded_file = ydl.prepare_filename(info)
 
-        # Get the downloaded filename
-        info = ydl.extract_info(url, download=False)
-        ext = info.get('ext', 'mp4')
-        downloaded_file = os.path.join(save_path, f"{info['title']}.{ext}")
+        # Sanitize the final filename
+        safe_file = os.path.join(save_path, make_safe_filename(os.path.basename(downloaded_file)))
 
-        log_widget.insert(tk.END, f"Download finished! Saved as:\n{downloaded_file}\n")
+        # Rename the file
+        if safe_file != downloaded_file:
+           os.rename(downloaded_file, safe_file)
+
+        base, ext = os.path.splitext(safe_file)
+        output_file = base + ".mp4"
+
+        status_label.config(text="Converting to MP4...")
+        #subprocess.run([ "ffmpeg", "-y", "-i", safe_file, "-c:v", "libx264", "-preset", "fast", "-c:a", "aac", "-b:a", "192k", output_file ], check=True, shell=True)
+        subprocess.run([ "ffmpeg", "-y", "-i", safe_file, "-c:v", "copy", "-c:a", "aac", output_file ], check=True, shell=True)
+        # Delete original webm
+        os.remove(safe_file)
+
+        log_widget.insert(tk.END, f"Download finished! \n Saved as:\n{output_file}\n")
         log_widget.see(tk.END)
         status_label.config(text="Done!")
 
