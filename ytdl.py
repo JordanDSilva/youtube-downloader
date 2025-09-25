@@ -1,11 +1,19 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import threading, os, subprocess, requests
+import sys
+import webbrowser
 from yt_dlp import YoutubeDL
 
 # ----------------- Worker Functions -----------------
 CURRENT_VERSION = "1.1.0"
 REPO = "JordanDSilva/youtube-downloader"
+
+def get_ffmpeg_path():
+    if hasattr(sys, "_MEIPASS"):  # Running from PyInstaller bundle
+        # Windows bundle
+        return os.path.join(sys._MEIPASS, "ffmpeg.exe")
+    return "/usr/bin/ffmpeg"  # fallback: system-installed ffmpeg
 
 def check_for_update():
     try:
@@ -14,12 +22,22 @@ def check_for_update():
         response.raise_for_status()
         latest = response.json()["tag_name"].lstrip("v")
 
+        release_url = response.json()["html_url"]
+
         if latest != CURRENT_VERSION:
-            return f"New version {latest} available! (You have {CURRENT_VERSION})"
+            ans = messagebox.askyesno(
+                "Update Available",
+                f"A new version {latest} is available!\n"
+                f"You have {CURRENT_VERSION}.\n\n"
+                "Do you want to open GitHub to download it?"
+            )
+            if ans:
+                webbrowser.open(release_url)
+            return ""
         else:
-            return f"You are up to date (version {CURRENT_VERSION})."
+            return f"Up to date (version {CURRENT_VERSION})"
     except Exception as e:
-        return f"Update check failed: {e}"
+        return f"Update check failed:\n{e}"
 
 def download_video(url, save_path, log_widget, status_label):
     try:
@@ -27,6 +45,7 @@ def download_video(url, save_path, log_widget, status_label):
         ydl_opts = {
             'format': "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
             'merge_output_format': 'mp4',
+            'ffmpeg_location': os.path.dirname(get_ffmpeg_path()),
             'outtmpl': os.path.join(save_path, '%(title)s.%(ext)s'),
             'noplaylist': True,
             'progress_hooks': [lambda d: progress_hook(d, log_widget, status_label)],
@@ -120,7 +139,7 @@ status_label.grid(row=3, column=0, sticky="w", padx=5)
 log_box = tk.Text(root, wrap="word")
 log_box.grid(row=4, column=0, columnspan=3, padx=5, pady=5, sticky="nsew")
 
-root.after(2000, on_startup)  # run after window loads
+root.after(500, on_startup)  # run after window loads
 
 root.mainloop()
 

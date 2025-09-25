@@ -1,0 +1,70 @@
+name: Build Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"   # Runs only on version tags like v1.0.0
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller yt-dlp requests
+
+      - name: Download ffmpeg (Windows only)
+        if: matrix.os == 'windows-latest'
+        run: |
+          Invoke-WebRequest -Uri https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip -OutFile ffmpeg.zip
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg
+          $ffmpegExe = Get-ChildItem -Path ffmpeg -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+          echo "FFMPEG_PATH=$($ffmpegExe.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build with PyInstaller
+        run: |
+          if ($env:FFMPEG_PATH) {
+            pyinstaller --onefile yt_downloader.py --add-binary "$env:FFMPEG_PATH;."
+          } else {
+            pyinstaller --onefile yt_downloader.py
+          }
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: yt-downloader-${{ matrix.os }}
+          path: dist/*
+          
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: ./dist
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: ./dist/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
