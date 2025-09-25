@@ -6,7 +6,7 @@ import webbrowser
 from yt_dlp import YoutubeDL
 
 # ----------------- Worker Functions -----------------
-CURRENT_VERSION = "1.1.1"
+CURRENT_VERSION = "1.0.0"
 REPO = "JordanDSilva/youtube-downloader"
 
 def get_ffmpeg_path():
