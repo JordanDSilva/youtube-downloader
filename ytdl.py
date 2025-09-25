@@ -5,11 +5,10 @@ import sys
 import webbrowser
 import re
 from yt_dlp import YoutubeDL
-import imageio_ffmpeg as ffmpeg
-ffmpeg_path = ffmpeg.get_ffmpeg_exe()
+import imageio_ffmpeg
 
 # ----------------- Worker Functions -----------------
-CURRENT_VERSION = "1.1.0"
+CURRENT_VERSION = "1.1.1"
 REPO = "JordanDSilva/youtube-downloader"
 
 def make_safe_filename(name):
@@ -47,9 +46,11 @@ def check_for_update():
 
 def download_video(url, save_path, log_widget, status_label):
     try:
+        ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
         status_label.config(text="Downloading...")
         ydl_opts = {
             'format': "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+            'ffmpeg_location' : ffmpeg_path,
             'outtmpl': os.path.join(save_path, '%(title)s.%(ext)s'),
             'noplaylist': True,
             'progress_hooks': [lambda d: progress_hook(d, log_widget, status_label)],
@@ -71,7 +72,7 @@ def download_video(url, save_path, log_widget, status_label):
         output_file = base + ".mp4"
 
         status_label.config(text="Converting to MP4...")
-        subprocess.run([ ffmpeg_path, "-y", "-i", safe_file, "-c:v", "copy", "-c:a", "aac", output_file ], check=True, shell=True)
+        subprocess.run([ffmpeg_path, "-y", "-i", safe_file, "-c:v", "copy", "-c:a", "aac", output_file], check=True)
         # Delete original webm
         os.remove(safe_file)
 
