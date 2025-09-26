@@ -1,16 +1,21 @@
+from yt_dlp import YoutubeDL
+import imageio_ffmpeg
+
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-import threading, os, subprocess, requests
+
+import threading
+import os
+import subprocess
+import requests
 import time
 import glob
 import sys
 import webbrowser
 import re
-from yt_dlp import YoutubeDL
-import imageio_ffmpeg
 
 # ----------------- Worker Functions -----------------
-CURRENT_VERSION = "1.2.0"
+CURRENT_VERSION = "1.2.1"
 REPO = "JordanDSilva/youtube-downloader"
 
 ffmpeg_process = None
@@ -56,7 +61,7 @@ def convert_to_mp4(input_file: str) -> str:
 
     cmd = [
         ffmpeg_path, "-y", "-i", safe_input,
-        "-c:v", "libx264", "-preset", "fast",
+        "-c:v", "copy", 
         "-c:a", "aac",
         safe_output
     ]
@@ -96,6 +101,7 @@ def download_video(url, save_path, log_widget, status_label):
 
         ydl_opts = {
             'format': "bestvideo[height<=1080]+bestaudio/best",
+            'ffmpeg_location': ffmpeg_path,
             'outtmpl': os.path.join(save_path, '%(playlist_index)s - %(title)s.%(ext)s')
                         if playlist_var.get() else os.path.join(save_path, '%(title)s.%(ext)s'),
             'noplaylist': False,
