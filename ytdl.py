@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import threading, os, subprocess, requests
+import time
 import glob
 import sys
 import webbrowser
@@ -9,19 +10,12 @@ from yt_dlp import YoutubeDL
 import imageio_ffmpeg
 
 # ----------------- Worker Functions -----------------
-CURRENT_VERSION = "1.1.1"
+CURRENT_VERSION = "1.2.0"
 REPO = "JordanDSilva/youtube-downloader"
 
+ffmpeg_process = None
+ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
 cancel_event = threading.Event()
-
-def make_safe_filename(name):
-    # Replace & with 'and'
-    name = name.replace("&", "and")
-    # Remove illegal Windows characters: \ / : * ? " < > |
-    name = re.sub(r'[\\/:*?"<>|]', '', name)
-    # Replace multiple spaces with a single space
-    name = re.sub(r'\s+', ' ', name).strip()
-    return name
 
 def check_for_update():
     try:
@@ -47,55 +41,107 @@ def check_for_update():
     except Exception as e:
         return f"Update check failed:\n{e}"
 
+def make_safe_filename(name):
+    name = name.replace("&", "and")
+    name = re.sub(r'[\\/:*?"<>|]', '', name)
+    name = re.sub(r'\s+', ' ', name).strip()
+    return name
+
+def convert_to_mp4(input_file: str) -> str:
+    global ffmpeg_process
+    base, _ = os.path.splitext(input_file)
+    output_file = base + ".mp4"
+    safe_input = input_file
+    safe_output  = output_file
+
+    cmd = [
+        ffmpeg_path, "-y", "-i", safe_input,
+        "-c:v", "libx264", "-preset", "fast",
+        "-c:a", "aac",
+        safe_output
+    ]
+    
+    ffmpeg_process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    try:
+        while True:
+            # check if process finished
+            if ffmpeg_process.poll() is not None:
+                break
+            # check cancel flag
+            if cancel_event.is_set():
+                ffmpeg_process.terminate()  # stop ffmpeg
+                ffmpeg_process.wait()
+                for f in glob.glob(os.path.join(os.path.dirname(safe_input), "*.webm")):
+                   try: os.remove(f)
+                   except: pass
+                raise Exception("Conversion cancelled by user")
+            time.sleep(0.1)
+
+        if ffmpeg_process.returncode != 0:
+            _, stderr = ffmpeg_process.communicate(timeout=1)
+            raise Exception(f"ffmpeg failed: {stderr.decode(errors='ignore')}")
+
+    finally:
+        ffmpeg_process = None
+        # optionally delete input_file if needed
+        if os.path.exists(safe_input):
+            os.remove(safe_input)
+
+    return safe_output
+
 def download_video(url, save_path, log_widget, status_label):
     try:
-        ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
         status_label.config(text="Downloading...")
+
         ydl_opts = {
-            'format': "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
-            'ffmpeg_location' : ffmpeg_path,
-            'outtmpl': os.path.join(save_path, '%(playlist_index)s-%(title)s.%(ext)s'),
+            'format': "bestvideo[height<=1080]+bestaudio/best",
+            'outtmpl': os.path.join(save_path, '%(playlist_index)s - %(title)s.%(ext)s')
+                        if playlist_var.get() else os.path.join(save_path, '%(title)s.%(ext)s'),
             'noplaylist': False,
             'progress_hooks': [lambda d: progress_hook(d, log_widget, status_label)],
             'quiet': True,
             'no_warnings': True,
         }
+
         with YoutubeDL(ydl_opts) as ydl:
-           info = ydl.extract_info(url, download=True)
-           downloaded_file = ydl.prepare_filename(info)
+            info = ydl.extract_info(url, download=True)
 
-        # Sanitize the final filename
-        safe_file = os.path.join(save_path, make_safe_filename(os.path.basename(downloaded_file)))
+            if "entries" in info:
+               entries = info["entries"]
+            else:
+               entries = [info]           
 
-        # Rename the file
-        if safe_file != downloaded_file:
-           os.rename(downloaded_file, safe_file)
+        for video in entries:
+           if cancel_event.is_set():
+               log_widget.insert(tk.END, "Cancelled before conversion.\n")
+               break
+           in_file = ydl.prepare_filename(video)
+           in_file = os.path.join(save_path, make_safe_filename(os.path.basename(in_file)))
 
-        base, ext = os.path.splitext(safe_file)
-        output_file = base + ".mp4"
+           log_widget.insert(tk.END, f"Converting {video['title']}...\n")
+           log_widget.see(tk.END)
+           try:
+               out_file = convert_to_mp4(in_file)
+               log_widget.insert(tk.END, f"Saved as {out_file}\n")
+           except Exception as conv_err:
+               log_widget.insert(tk.END, f"Conversion failed: {conv_err}\n")
 
-        status_label.config(text="Converting to MP4...")
-        subprocess.run([ffmpeg_path, "-y", "-i", safe_file, "-c:v", "copy", "-c:a", "aac", output_file], check=True)
-        # Delete original webm
-        os.remove(safe_file)
-
-        log_widget.insert(tk.END, f"Download finished! \n Saved as:\n{output_file}\n")
-        log_widget.see(tk.END)
         status_label.config(text="Done!")
+        log_widget.insert(tk.END, "All downloads finished.\n")
+        log_widget.see(tk.END)
 
     except Exception as e:
         if str(e) == "Download cancelled by user":
             status_label.config(text="Cancelled")
             log_widget.insert(tk.END, "Download cancelled.\n")
-
-            part_files = glob.glob(os.path.join(save_path, "*.part"))
-            for f in part_files:
-                try:
-                    os.remove(f)
-                    log_widget.insert(tk.END, f"Removed leftover file: {f}\n")
-                except OSError:
-                    pass
-
+            # remove leftovers
+            for f in glob.glob(os.path.join(save_path, "*.part")):
+                try: os.remove(f)
+                except: pass
+            for f in glob.glob(os.path.join(save_path, "*.webm")):
+                try: os.remove(f)
+                except: pass
         else:
             messagebox.showerror("Error", str(e))
             status_label.config(text="Download failed :(")
@@ -120,7 +166,7 @@ def progress_hook(d, log_widget, status_label):
 def start_download():
     url = url_entry.get().strip()
     save_path = path_var.get()
-    #fmt_choice = formats_var.get()
+    
     if not url:
         messagebox.showwarning("Input required", "Please enter a YouTube URL")
         return
@@ -150,6 +196,8 @@ def on_startup():
 
 # ----------------- GUI Layout -----------------
 root = tk.Tk()
+playlist_var = tk.BooleanVar(value=False)
+
 root.title("YouTube Downloader")
 root.resizable(True, True)
 
@@ -173,6 +221,9 @@ status_label = tk.Label(root, text="Idle", fg="blue")
 status_label.grid(row=3, column=0, sticky="w", padx=5)
 
 tk.Button(root, text="Cancel", command=lambda: cancel_event.set()).grid(row = 3, column=2, pady=10)
+
+playlist_check = tk.Checkbutton(root, text="Number entire playlist", variable=playlist_var)
+playlist_check.grid(row=2, column=0, columnspan=3, sticky="w", padx=5, pady=5)
 
 log_box = tk.Text(root, wrap="word")
 log_box.grid(row=4, column=0, columnspan=3, padx=5, pady=5, sticky="nsew")
