@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import threading, os, subprocess, requests
+import glob
 import sys
 import webbrowser
 import re
@@ -10,6 +11,8 @@ import imageio_ffmpeg
 # ----------------- Worker Functions -----------------
 CURRENT_VERSION = "1.1.1"
 REPO = "JordanDSilva/youtube-downloader"
+
+cancel_event = threading.Event()
 
 def make_safe_filename(name):
     # Replace & with 'and'
@@ -51,8 +54,8 @@ def download_video(url, save_path, log_widget, status_label):
         ydl_opts = {
             'format': "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
             'ffmpeg_location' : ffmpeg_path,
-            'outtmpl': os.path.join(save_path, '%(title)s.%(ext)s'),
-            'noplaylist': True,
+            'outtmpl': os.path.join(save_path, '%(playlist_index)s-%(title)s.%(ext)s'),
+            'noplaylist': False,
             'progress_hooks': [lambda d: progress_hook(d, log_widget, status_label)],
             'quiet': True,
             'no_warnings': True,
@@ -81,10 +84,26 @@ def download_video(url, save_path, log_widget, status_label):
         status_label.config(text="Done!")
 
     except Exception as e:
-        messagebox.showerror("Error", str(e))
-        status_label.config(text="Download failed :(")
+        if str(e) == "Download cancelled by user":
+            status_label.config(text="Cancelled")
+            log_widget.insert(tk.END, "Download cancelled.\n")
+
+            part_files = glob.glob(os.path.join(save_path, "*.part"))
+            for f in part_files:
+                try:
+                    os.remove(f)
+                    log_widget.insert(tk.END, f"Removed leftover file: {f}\n")
+                except OSError:
+                    pass
+
+        else:
+            messagebox.showerror("Error", str(e))
+            status_label.config(text="Download failed :(")
 
 def progress_hook(d, log_widget, status_label):
+    if cancel_event.is_set():
+        raise Exception("Download cancelled by user")
+
     if d['status'] == 'downloading':
         total = d.get('total_bytes') or d.get('total_bytes_estimate')
         downloaded = d.get('downloaded_bytes', 0)
@@ -109,9 +128,10 @@ def start_download():
         messagebox.showwarning("Input required", "Please choose a save folder")
         return
     
+    cancel_event.clear()
     log_box.insert(tk.END, f"Starting download: {url} \n")
-
     log_box.see(tk.END)
+    
     threading.Thread(
         target=download_video,
         args=(url, save_path, log_box, status_label),
@@ -151,6 +171,8 @@ tk.Button(root, text="Browse", command=choose_folder).grid(row=1, column=2, padx
 tk.Button(root, text="Download", command=start_download).grid(row=3, column=1, pady=10)
 status_label = tk.Label(root, text="Idle", fg="blue")
 status_label.grid(row=3, column=0, sticky="w", padx=5)
+
+tk.Button(root, text="Cancel", command=lambda: cancel_event.set()).grid(row = 3, column=2, pady=10)
 
 log_box = tk.Text(root, wrap="word")
 log_box.grid(row=4, column=0, columnspan=3, padx=5, pady=5, sticky="nsew")
