@@ -1,2 +1,0 @@
-pyinstaller --onefile --add-binary "C:\ffmpeg\bin\ffmpeg.exe;." ytdl.py
-

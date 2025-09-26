@@ -1,2 +1,2 @@
-pyinstaller --onefile --add-binary "/usr/bin/ffmpeg:." ytdl.py
+pyinstaller --onefile --noconsole  ytdl.py
 
