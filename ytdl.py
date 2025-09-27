@@ -15,7 +15,7 @@ import webbrowser
 import re
 
 # ----------------- Worker Functions -----------------
-CURRENT_VERSION = "1.2.1"
+CURRENT_VERSION = "1.3.0"
 REPO = "JordanDSilva/youtube-downloader"
 
 ffmpeg_process = None
@@ -123,10 +123,6 @@ def download_video(url, save_path, log_widget, status_label):
 
             if "entries" in info:
                 entries = info["entries"]  # full playlist
-               # if playlist_var.get():
-               #     entries = info["entries"]  # full playlist
-               # else:
-               #     entries = [info["entries"][0]]  # only first video
             else:
                 entries = [info]  # single video
             
@@ -134,13 +130,10 @@ def download_video(url, save_path, log_widget, status_label):
             if not video:
                 continue
 
-            #ydl.download([video["webpage_url"]]) 
-
             if cancel_event.is_set():
                 log_widget.insert(tk.END, "Cancelled before conversion.\n")
                 break
             in_file = ydl.prepare_filename(video)
-            #in_file = os.path.join(save_path, make_safe_filename(os.path.basename(in_file)))
 
             log_widget.insert(tk.END, f"Converting {video['title']}...\n")
             log_widget.see(tk.END)
@@ -230,7 +223,6 @@ for i in range(5):
     root.grid_rowconfigure(i, weight=0)
 root.grid_rowconfigure(4, weight=1)  # log box expands
 
-#tk.Label(root, text="YouTube URL:").grid(row=0, column=0, sticky="w")
 url_entry = tk.Entry(root)
 url_entry.grid(row=0, column=1, columnspan=2, padx=5, pady=5, sticky="ew")
 tk.Button(root, text="Paste YouTube URL: ", command=lambda: paste_clipboard(root, url_entry), bg="red", fg="white", activebackground="darkred", activeforeground="white").grid(row=0, column=0, padx=5, pady=5)
@@ -246,7 +238,7 @@ status_label.grid(row=3, column=0, sticky="w", padx=5)
 
 tk.Button(root, text="Cancel", command=lambda: cancel_event.set()).grid(row = 3, column=2, pady=10)
 
-playlist_check = tk.Checkbutton(root, text="Number entire playlist", variable=playlist_var)
+playlist_check = tk.Checkbutton(root, text="Download entire playlist", variable=playlist_var)
 playlist_check.grid(row=2, column=0, columnspan=3, sticky="w", padx=5, pady=5)
 
 log_box = tk.Text(root, wrap="word")
