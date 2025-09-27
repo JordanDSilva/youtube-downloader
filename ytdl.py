@@ -46,6 +46,14 @@ def check_for_update():
     except Exception as e:
         return f"Update check failed:\n{e}"
 
+def paste_clipboard(root, url_entry):
+    try:
+        url = root.clipboard_get().strip()
+        url_entry.delete(0, tk.END)   # clear any existing text
+        url_entry.insert(0, url)      # insert clipboard content
+    except tk.TclError:
+        messagebox.showwarning("Clipboard empty", "No text found in clipboard")
+
 def make_safe_filename(name):
     name = name.replace("&", "and")
     name = re.sub(r'[\\/:*?"<>|]', '', name)
@@ -104,7 +112,7 @@ def download_video(url, save_path, log_widget, status_label):
             'ffmpeg_location': ffmpeg_path,
             'outtmpl': os.path.join(save_path, '%(playlist_index)s - %(title)s.%(ext)s')
                         if playlist_var.get() else os.path.join(save_path, '%(title)s.%(ext)s'),
-            'noplaylist': False,
+            'noplaylist': not playlist_var.get(),
             'progress_hooks': [lambda d: progress_hook(d, log_widget, status_label)],
             'quiet': True,
             'no_warnings': True,
@@ -114,25 +122,34 @@ def download_video(url, save_path, log_widget, status_label):
             info = ydl.extract_info(url, download=True)
 
             if "entries" in info:
-               entries = info["entries"]
+                entries = info["entries"]  # full playlist
+               # if playlist_var.get():
+               #     entries = info["entries"]  # full playlist
+               # else:
+               #     entries = [info["entries"][0]]  # only first video
             else:
-               entries = [info]           
-
+                entries = [info]  # single video
+            
         for video in entries:
-           if cancel_event.is_set():
-               log_widget.insert(tk.END, "Cancelled before conversion.\n")
-               break
-           in_file = ydl.prepare_filename(video)
-           in_file = os.path.join(save_path, make_safe_filename(os.path.basename(in_file)))
+            if not video:
+                continue
 
-           log_widget.insert(tk.END, f"Converting {video['title']}...\n")
-           log_widget.see(tk.END)
-           try:
-               out_file = convert_to_mp4(in_file)
-               log_widget.insert(tk.END, f"Saved as {out_file}\n")
-           except Exception as conv_err:
-               log_widget.insert(tk.END, f"Conversion failed: {conv_err}\n")
+            #ydl.download([video["webpage_url"]]) 
 
+            if cancel_event.is_set():
+                log_widget.insert(tk.END, "Cancelled before conversion.\n")
+                break
+            in_file = ydl.prepare_filename(video)
+            #in_file = os.path.join(save_path, make_safe_filename(os.path.basename(in_file)))
+
+            log_widget.insert(tk.END, f"Converting {video['title']}...\n")
+            log_widget.see(tk.END)
+            try:
+                out_file = convert_to_mp4(in_file)
+                log_widget.insert(tk.END, f"Saved as {out_file}\n")
+            except Exception as conv_err:
+                log_widget.insert(tk.END, f"Conversion failed: {conv_err}\n")
+        
         status_label.config(text="Done!")
         log_widget.insert(tk.END, "All downloads finished.\n")
         log_widget.see(tk.END)
@@ -213,9 +230,10 @@ for i in range(5):
     root.grid_rowconfigure(i, weight=0)
 root.grid_rowconfigure(4, weight=1)  # log box expands
 
-tk.Label(root, text="YouTube URL:").grid(row=0, column=0, sticky="w")
+#tk.Label(root, text="YouTube URL:").grid(row=0, column=0, sticky="w")
 url_entry = tk.Entry(root)
 url_entry.grid(row=0, column=1, columnspan=2, padx=5, pady=5, sticky="ew")
+tk.Button(root, text="Paste YouTube URL: ", command=lambda: paste_clipboard(root, url_entry), bg="red", fg="white", activebackground="darkred", activeforeground="white").grid(row=0, column=0, padx=5, pady=5)
 
 tk.Label(root, text="Save to:").grid(row=1, column=0, sticky="w")
 path_var = tk.StringVar()
