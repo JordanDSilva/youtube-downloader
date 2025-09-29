@@ -18,7 +18,7 @@ import webbrowser
 import re
 
 # ----------------- Worker Functions -----------------
-CURRENT_VERSION = "1.4.1"
+CURRENT_VERSION = "1.4.2"
 REPO = "JordanDSilva/youtube-downloader"
 
 ffmpeg_process = None
@@ -49,6 +49,7 @@ def check_for_update():
         else:
             return "You are ahead (dev build)"
     except Exception as e:
+
         return f"Update check failed:\n{e}"
 
 def paste_clipboard(root, url_entry):
@@ -79,8 +80,8 @@ def convert_to_mp4(input_file: str) -> str:
         safe_output
     ]
     
-    ffmpeg_process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
+    ffmpeg_process = subprocess.Popen(cmd) 
+ 
     try:
         while True:
             # check if process finished
@@ -95,7 +96,7 @@ def convert_to_mp4(input_file: str) -> str:
 
         if ffmpeg_process.returncode != 0:
             _, stderr = ffmpeg_process.communicate(timeout=1)
-            raise Exception(f"ffmpeg failed: {stderr.decode(errors='ignore')}")
+            raise Exception(f"ffmpeg failed :(")
 
     finally:
         ffmpeg_process = None
