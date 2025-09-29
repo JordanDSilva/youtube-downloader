@@ -4,10 +4,12 @@ import imageio_ffmpeg
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+import requests
+from packaging import version
+
 import threading
 import os
 import subprocess
-import requests
 import time
 import glob
 import sys
@@ -15,7 +17,7 @@ import webbrowser
 import re
 
 # ----------------- Worker Functions -----------------
-CURRENT_VERSION = "1.3.0"
+CURRENT_VERSION = "1.4.0"
 REPO = "JordanDSilva/youtube-downloader"
 
 ffmpeg_process = None
@@ -31,7 +33,7 @@ def check_for_update():
 
         release_url = response.json()["html_url"]
 
-        if latest != CURRENT_VERSION:
+        if version.parse(latest) > version.parse(CURRENT_VERSION):
             ans = messagebox.askyesno(
                 "Update Available",
                 f"A new version {latest} is available!\n"
@@ -41,8 +43,10 @@ def check_for_update():
             if ans:
                 webbrowser.open(release_url)
             return ""
-        else:
+        elif version.parse(latest) == version.parse(CURRENT_VERSION):
             return f"Up to date (version {CURRENT_VERSION})"
+        else:
+            return "You are ahead (dev build)"
     except Exception as e:
         return f"Update check failed:\n{e}"
 
@@ -108,11 +112,18 @@ def download_video(url, save_path, log_widget, status_label):
         status_label.config(text="Downloading...")
 
         ydl_opts = {
-            'format': "bestvideo[height<=1080]+bestaudio/best",
+            'format': "bestvideo[height<=1080]+bestaudio/best" 
+                        if not extract_audio_var.get() else "bestaudio/best",
             'ffmpeg_location': ffmpeg_path,
             'outtmpl': os.path.join(save_path, '%(playlist_index)s - %(title)s.%(ext)s')
                         if playlist_var.get() else os.path.join(save_path, '%(title)s.%(ext)s'),
             'noplaylist': not playlist_var.get(),
+            'ignoreerrors': True,
+            'postprocessors': [{            
+                                'key': 'FFmpegExtractAudio',
+                                'preferredcodec': 'mp3',
+                                'preferredquality': '192',
+                                }] if extract_audio_var.get() else [],
             'progress_hooks': [lambda d: progress_hook(d, log_widget, status_label)],
             'quiet': True,
             'no_warnings': True,
@@ -126,22 +137,23 @@ def download_video(url, save_path, log_widget, status_label):
             else:
                 entries = [info]  # single video
             
-        for video in entries:
-            if not video:
-                continue
+        if not extract_audio_var.get():
+            for video in entries:
+                if not video:
+                    continue
 
-            if cancel_event.is_set():
-                log_widget.insert(tk.END, "Cancelled before conversion.\n")
-                break
-            in_file = ydl.prepare_filename(video)
+                if cancel_event.is_set():
+                    log_widget.insert(tk.END, "Cancelled before conversion.\n")
+                    break
+                in_file = ydl.prepare_filename(video)
 
-            log_widget.insert(tk.END, f"Converting {video['title']}...\n")
-            log_widget.see(tk.END)
-            try:
-                out_file = convert_to_mp4(in_file)
-                log_widget.insert(tk.END, f"Saved as {out_file}\n")
-            except Exception as conv_err:
-                log_widget.insert(tk.END, f"Conversion failed: {conv_err}\n")
+                log_widget.insert(tk.END, f"Converting {video['title']}...\n")
+                log_widget.see(tk.END)
+                try:
+                    out_file = convert_to_mp4(in_file)
+                    log_widget.insert(tk.END, f"Saved as {out_file}\n")
+                except Exception as conv_err:
+                    log_widget.insert(tk.END, f"Conversion failed: {conv_err}\n")
         
         status_label.config(text="Done!")
         log_widget.insert(tk.END, "All downloads finished.\n")
@@ -213,6 +225,7 @@ def on_startup():
 # ----------------- GUI Layout -----------------
 root = tk.Tk()
 playlist_var = tk.BooleanVar(value=False)
+extract_audio_var = tk.BooleanVar(value=False)
 
 root.title("YouTube Downloader")
 root.resizable(True, True)
@@ -240,6 +253,9 @@ tk.Button(root, text="Cancel", command=lambda: cancel_event.set()).grid(row = 3,
 
 playlist_check = tk.Checkbutton(root, text="Download entire playlist", variable=playlist_var)
 playlist_check.grid(row=2, column=0, columnspan=3, sticky="w", padx=5, pady=5)
+
+extract_audio_check = tk.Checkbutton(root, text="Extract audio", variable=extract_audio_var)
+extract_audio_check.grid(row=2, column=1, columnspan=3, sticky="w", padx=5, pady=5)
 
 log_box = tk.Text(root, wrap="word")
 log_box.grid(row=4, column=0, columnspan=3, padx=5, pady=5, sticky="nsew")
