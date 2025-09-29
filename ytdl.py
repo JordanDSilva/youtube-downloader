@@ -1,4 +1,5 @@
 from yt_dlp import YoutubeDL
+from yt_dlp.utils import DownloadCancelled
 import imageio_ffmpeg
 
 import tkinter as tk
@@ -17,7 +18,7 @@ import webbrowser
 import re
 
 # ----------------- Worker Functions -----------------
-CURRENT_VERSION = "1.4.0"
+CURRENT_VERSION = "1.4.1"
 REPO = "JordanDSilva/youtube-downloader"
 
 ffmpeg_process = None
@@ -89,9 +90,6 @@ def convert_to_mp4(input_file: str) -> str:
             if cancel_event.is_set():
                 ffmpeg_process.terminate()  # stop ffmpeg
                 ffmpeg_process.wait()
-                for f in glob.glob(os.path.join(os.path.dirname(safe_input), "*.webm")):
-                   try: os.remove(f)
-                   except: pass
                 raise Exception("Conversion cancelled by user")
             time.sleep(0.1)
 
@@ -122,7 +120,7 @@ def download_video(url, save_path, log_widget, status_label):
             'postprocessors': [{            
                                 'key': 'FFmpegExtractAudio',
                                 'preferredcodec': 'mp3',
-                                'preferredquality': '192',
+                                'preferredquality': '320',
                                 }] if extract_audio_var.get() else [],
             'progress_hooks': [lambda d: progress_hook(d, log_widget, status_label)],
             'quiet': True,
@@ -163,11 +161,7 @@ def download_video(url, save_path, log_widget, status_label):
         if str(e) == "Download cancelled by user":
             status_label.config(text="Cancelled")
             log_widget.insert(tk.END, "Download cancelled.\n")
-            # remove leftovers
             for f in glob.glob(os.path.join(save_path, "*.part")):
-                try: os.remove(f)
-                except: pass
-            for f in glob.glob(os.path.join(save_path, "*.webm")):
                 try: os.remove(f)
                 except: pass
         else:
@@ -176,14 +170,15 @@ def download_video(url, save_path, log_widget, status_label):
 
 def progress_hook(d, log_widget, status_label):
     if cancel_event.is_set():
-        raise Exception("Download cancelled by user")
+        log_widget.insert("end", "Cancelled by user\n")
+        log_widget.see("end")
+        status_label.config(text="Cancelled")
+        raise DownloadCancelled("Download cancelled by user")
 
     if d['status'] == 'downloading':
         total = d.get('total_bytes') or d.get('total_bytes_estimate')
         downloaded = d.get('downloaded_bytes', 0)
         pct = downloaded * 100 / total if total else 0
-        log_widget.insert(tk.END, f"Downloading... {pct:.1f}%\n")
-        log_widget.see(tk.END)
         status_label.config(text=f"Downloading... {pct:.1f}%")
     elif d['status'] == 'finished':
         log_widget.insert(tk.END, "Download complete. Processing...\n")
