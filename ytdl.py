@@ -18,7 +18,7 @@ import webbrowser
 import re
 
 # ----------------- Worker Functions -----------------
-CURRENT_VERSION = "1.4.2"
+CURRENT_VERSION = "1.4.3"
 REPO = "JordanDSilva/youtube-downloader"
 
 ffmpeg_process = None
@@ -136,7 +136,7 @@ def download_video(url, save_path, log_widget, status_label):
             else:
                 entries = [info]  # single video
             
-        if not extract_audio_var.get():
+        if not extract_audio_var.get() and convert_var.get():
             for video in entries:
                 if not video:
                     continue
@@ -222,6 +222,7 @@ def on_startup():
 root = tk.Tk()
 playlist_var = tk.BooleanVar(value=False)
 extract_audio_var = tk.BooleanVar(value=False)
+convert_var = tk.BooleanVar(value=True)
 
 root.title("YouTube Downloader")
 root.resizable(True, True)
@@ -252,6 +253,9 @@ playlist_check.grid(row=2, column=0, columnspan=3, sticky="w", padx=5, pady=5)
 
 extract_audio_check = tk.Checkbutton(root, text="Extract audio", variable=extract_audio_var)
 extract_audio_check.grid(row=2, column=1, columnspan=3, sticky="w", padx=5, pady=5)
+
+convert_check = tk.Checkbutton(root, text="Convert", variable=convert_var)
+convert_check.grid(row=2, column=2, columnspan=3, sticky="w", padx=5, pady=5)
 
 log_box = tk.Text(root, wrap="word")
 log_box.grid(row=4, column=0, columnspan=3, padx=5, pady=5, sticky="nsew")
