@@ -18,7 +18,7 @@ import webbrowser
 import re
 
 # ----------------- Worker Functions -----------------
-CURRENT_VERSION = "1.4.3"
+CURRENT_VERSION = "1.4.4"
 REPO = "JordanDSilva/youtube-downloader"
 
 ffmpeg_process = None
